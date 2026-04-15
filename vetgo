@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VetGo Prototipo V7 - Tracking GPS y Flujo Corregido</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Noto Sans"', 'sans-serif'],
+                        body: ['"Satoshi"', 'sans-serif'],
+                        headline: ['"Safiro"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+    <style>
+        @import url('https://fonts.cdnfonts.com/css/satoshi');
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
+
+        .sidebar-expanded { width: 260px; }
+        .sidebar-collapsed { width: 88px; }
+        .sidebar-text { transition: opacity 0.2s; white-space: nowrap; }
+        .sidebar-collapsed .sidebar-text { opacity: 0; display: none; }
+
+        .main-expanded { margin-left: 308px; }
+        .main-collapsed { margin-left: 136px; }
+        
+        body { font-family: 'Noto Sans', sans-serif; font-size: 16px; }
+        .font-body { font-family: 'Satoshi', sans-serif; }
+        .font-headline { font-family: 'Satoshi', sans-serif; }
+
+        .bg-map-pattern {
+            background-color: #e5e7eb;
+            background-image: radial-gradient(#9ca3af 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        /* Animación personalizada para la ruta del mapa */
+        .dash-anim {
+            stroke-dasharray: 10;
+            animation: dash 20s linear infinite;
+        }
+        @keyframes dash {
+            to { stroke-dashoffset: -1000; }
+        }
+    </style>
+</head>
+<body class="bg-[#F1F1F1] text-[#333333] min-h-screen relative overflow-x-hidden">
+
+    <div id="auth-wrapper" class="block w-full min-h-screen flex items-center justify-center p-6 bg-[#1E3A8A]">
+        
+        <div id="auth-login" class="bg-white rounded-[32px] shadow-2xl p-12 max-w-[450px] w-full flex flex-col items-center">
+            <div class="w-20 h-20 bg-[#1E3A8A]/10 rounded-full flex items-center justify-center text-[#1E3A8A] mb-6">
+                <span class="material-symbols-outlined text-[40px]" style="font-variation-settings: 'FILL' 1;">pets</span>
+            </div>
+            <h1 class="font-headline text-[32px] text-[#1E3A8A] mb-2">Bienvenido a VetGo</h1>
+            <p class="font-sans text-[14px] text-[#888888] mb-8 text-center">Tu veterinario, donde está tu mascota.</p>
+            
+            <div class="w-full space-y-4 mb-8">
+                <div>
+                    <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Correo electrónico</label>
+                    <input type="email" value="valentina@ejemplo.com" class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] font-sans text-[14px] text-[#333333] focus:ring-1 focus:ring-[#1E3A8A] focus:outline-none">
+                </div>
+                <div>
+                    <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Contraseña</label>
+                    <input type="password" value="********" class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] font-sans text-[14px] text-[#333333] focus:ring-1 focus:ring-[#1E3A8A] focus:outline-none">
+                </div>
+            </div>
+            
+            <button onclick="doLogin()" class="w-full h-[48px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] font-body text-[14px] font-medium uppercase hover:bg-[#172b66] transition-colors shadow-md mb-4">
+                INICIAR SESIÓN
+            </button>
+            <button onclick="switchAuth('auth-role-select')" class="w-full h-[48px] rounded-[200px] border border-[#1E3A8A] text-[#1E3A8A] bg-transparent font-body text-[14px] font-medium uppercase hover:bg-[#1E3A8A]/5 transition-colors">
+                CREAR UNA CUENTA
+            </button>
+        </div>
+
+        <div id="auth-role-select" class="hidden bg-white rounded-[32px] shadow-2xl p-12 max-w-[600px] w-full flex flex-col items-center">
+            <button onclick="switchAuth('auth-login')" class="self-start text-[#888888] hover:text-[#1E3A8A] mb-6"><span class="material-symbols-outlined">arrow_back</span></button>
+            <h1 class="font-headline text-[32px] text-[#1E3A8A] mb-2">Únete a VetGo</h1>
+            <p class="font-sans text-[14px] text-[#888888] mb-8 text-center">¿Cómo deseas usar la plataforma?</p>
+            
+            <div class="grid grid-cols-2 gap-6 w-full mb-8">
+                <div onclick="switchAuth('auth-register-client-1')" class="cursor-pointer border-2 border-gray-100 hover:border-[#1E3A8A] rounded-[24px] p-6 flex flex-col items-center text-center transition-colors">
+                    <div class="w-16 h-16 bg-[#1E3A8A]/10 rounded-full flex items-center justify-center text-[#1E3A8A] mb-4">
+                        <span class="material-symbols-outlined text-[32px]">face</span>
+                    </div>
+                    <span class="font-headline text-[20px] text-[#333333] mb-2">Dueño de Mascota</span>
+                    <span class="font-sans text-[12px] text-[#888888]">Busco atención domiciliaria y digitalizar el historial.</span>
+                </div>
+                <div onclick="switchAuth('auth-register-vet-1')" class="cursor-pointer border-2 border-gray-100 hover:border-[#1E3A8A] rounded-[24px] p-6 flex flex-col items-center text-center transition-colors">
+                    <div class="w-16 h-16 bg-[#F39C12]/10 rounded-full flex items-center justify-center text-[#F39C12] mb-4">
+                        <span class="material-symbols-outlined text-[32px]">medical_services</span>
+                    </div>
+                    <span class="font-headline text-[20px] text-[#333333] mb-2">Profesional (MVZ)</span>
+                    <span class="font-sans text-[12px] text-[#888888]">Quiero ofrecer mis servicios y gestionar mis consultas.</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="auth-register-client-1" class="hidden bg-white rounded-[32px] shadow-2xl p-12 max-w-[500px] w-full flex flex-col">
+            <button onclick="switchAuth('auth-role-select')" class="self-start text-[#888888] hover:text-[#1E3A8A] mb-6"><span class="material-symbols-outlined">arrow_back</span></button>
+            <h1 class="font-headline text-[32px] text-[#1E3A8A] mb-6">Tus datos personales</h1>
+            <div class="space-y-4 mb-8">
+                <div><label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Nombre completo</label><input type="text" class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] focus:ring-1 focus:ring-[#1E3A8A] outline-none"></div>
+            </div>
+            <button onclick="switchAuth('auth-register-client-2')" class="w-full h-[48px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] font-body text-[14px] font-medium uppercase hover:bg-[#172b66] transition-colors">SIGUIENTE</button>
+        </div>
+        <div id="auth-register-client-2" class="hidden bg-white rounded-[32px] shadow-2xl p-12 max-w-[500px] w-full flex flex-col">
+            <button onclick="switchAuth('auth-register-client-1')" class="self-start text-[#888888] hover:text-[#1E3A8A] mb-6"><span class="material-symbols-outlined">arrow_back</span></button>
+            <h1 class="font-headline text-[32px] text-[#1E3A8A] mb-6">Tu primera mascota</h1>
+            <div class="space-y-4 mb-8">
+                <div><label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Nombre de la mascota</label><input type="text" class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] focus:ring-1 focus:ring-[#1E3A8A] outline-none"></div>
+            </div>
+            <button onclick="doLogin()" class="w-full h-[48px] rounded-[200px] bg-[#2ECC71] text-[#FFFFFF] font-body text-[14px] font-medium uppercase hover:bg-[#27ae60] transition-colors">CREAR CUENTA VETGO</button>
+        </div>
+
+        <div id="auth-register-vet-1" class="hidden bg-white rounded-[32px] shadow-2xl p-12 max-w-[500px] w-full flex flex-col">
+            <button onclick="switchAuth('auth-role-select')" class="self-start text-[#888888] hover:text-[#1E3A8A] mb-6"><span class="material-symbols-outlined">arrow_back</span></button>
+            <span class="font-body text-[12px] text-[#888888] tracking-widest uppercase mb-1">Paso 1 de 2</span>
+            <h1 class="font-headline text-[32px] text-[#1E3A8A] mb-6">Perfil Profesional</h1>
+            <div class="space-y-4 mb-8">
+                <div>
+                    <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Nombre completo (MVZ)</label>
+                    <input type="text" placeholder="Ej. Dr. Andrés Gómez" class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] focus:ring-1 focus:ring-[#1E3A8A] outline-none">
+                </div>
+                <div>
+                    <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Especialidad principal</label>
+                    <select class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] bg-white focus:outline-none">
+                        <option>Generalista</option>
+                        <option>Dermatología</option>
+                        <option>Especialista Felinos</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="switchAuth('auth-register-vet-2')" class="w-full h-[48px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] font-body text-[14px] font-medium uppercase hover:bg-[#172b66] transition-colors">SIGUIENTE</button>
+        </div>
+
+        <div id="auth-register-vet-2" class="hidden bg-white rounded-[32px] shadow-2xl p-12 max-w-[500px] w-full flex flex-col">
+            <button onclick="switchAuth('auth-register-vet-1')" class="self-start text-[#888888] hover:text-[#1E3A8A] mb-6"><span class="material-symbols-outlined">arrow_back</span></button>
+            <span class="font-body text-[12px] text-[#888888] tracking-widest uppercase mb-1">Verificación</span>
+            <h1 class="font-headline text-[32px] text-[#1E3A8A] mb-6">Documentación Legal</h1>
+            <p class="font-sans text-[12px] text-[#888888] mb-6">Para garantizar la seguridad, necesitamos validar tus credenciales como especialista.</p>
+            
+            <div class="space-y-6 mb-8">
+                <div>
+                    <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Número de Tarjeta Profesional</label>
+                    <input type="text" placeholder="Ej. 12345-MVZ" class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] focus:ring-1 focus:ring-[#1E3A8A] outline-none">
+                </div>
+                <div class="w-full p-6 border-2 border-dashed border-[#1E3A8A]/50 bg-[#1E3A8A]/5 rounded-[24px] flex flex-col items-center justify-center text-center cursor-pointer hover:bg-[#1E3A8A]/10 transition-colors">
+                    <span class="material-symbols-outlined text-[#1E3A8A] text-[32px] mb-2">cloud_upload</span>
+                    <span class="font-body text-[14px] font-medium text-[#1E3A8A]">Sube tu Diploma o Tarjeta Profesional</span>
+                    <span class="font-sans text-[12px] text-[#888888] mt-1">Formatos: JPG, PNG, PDF</span>
+                </div>
+            </div>
+            
+            <button onclick="doLogin('vet')" class="w-full h-[48px] rounded-[200px] bg-[#2ECC71] text-[#FFFFFF] font-body text-[14px] font-medium uppercase hover:bg-[#27ae60] transition-colors shadow-md">
+                ENVIAR A VERIFICACIÓN
+            </button>
+        </div>
+    </div>
+
+
+    <div id="app-wrapper" class="hidden">
+        
+        <aside id="sidebar" class="sidebar-expanded h-[calc(100vh-48px)] fixed left-[24px] top-[24px] bg-[#333333] rounded-[32px] py-[32px] flex flex-col z-40 transition-all duration-300 overflow-x-hidden shadow-lg">
+            <button onclick="toggleSidebar()" class="absolute -right-3 top-[48px] w-8 h-8 bg-[#2A2A2A] rounded-full flex items-center justify-center border border-[#4A4A4A] text-white hover:bg-[#4A4A4A] transition-colors z-10 shadow-md">
+                <span id="sidebar-icon" class="material-symbols-outlined text-[16px]">chevron_left</span>
+            </button>
+
+            <div class="flex items-center gap-3 text-white mb-10 px-[24px] cursor-pointer" onclick="switchView('dashboard-view')">
+                <span class="material-symbols-outlined text-[28px] flex-shrink-0" style="font-variation-settings: 'FILL' 1; color: #60A5FA;">pets</span>
+                <span class="font-bold text-[22px] tracking-wide sidebar-text">VetGo</span>
+            </div>
+            
+            <nav class="flex flex-col gap-2 flex-1 font-sans text-[16px] font-normal text-white overflow-y-auto custom-scrollbar px-[16px]">
+                <a class="client-menu-item flex items-center gap-4 px-3 py-3 text-white hover:bg-white/10 rounded-[200px] transition-colors cursor-pointer" onclick="switchView('dashboard-view')">
+                    <span class="material-symbols-outlined text-[24px] flex-shrink-0" style="font-variation-settings: 'wght' 300;">home</span>
+                    <span class="sidebar-text">Inicio</span>
+                </a>
+                
+                <a class="client-menu-item flex items-center gap-4 px-3 py-3 text-white hover:bg-white/10 rounded-[200px] transition-colors cursor-pointer" onclick="switchView('pets-list-view')">
+                    <span class="material-symbols-outlined text-[24px] flex-shrink-0" style="font-variation-settings: 'wght' 300;">pets</span>
+                    <span class="sidebar-text">Mascotas</span>
+                </a>
+
+                <a onclick="startVetRegistration()" class="client-menu-item flex items-center gap-4 px-3 py-3 text-[#F39C12] hover:bg-[#F39C12]/10 rounded-[200px] transition-colors mt-6 cursor-pointer border border-transparent hover:border-[#F39C12]/30">
+                    <span class="material-symbols-outlined text-[24px] flex-shrink-0" style="font-variation-settings: 'wght' 300;">work</span>
+                    <span class="sidebar-text font-medium text-[14px]">Únete como Profesional</span>
+                </a>
+
+                <a class="vet-menu-item hidden flex items-center gap-4 px-3 py-3 text-[#60A5FA] bg-[#1E3A8A]/30 rounded-[200px] transition-colors cursor-pointer">
+                    <span class="material-symbols-outlined text-[24px] flex-shrink-0" style="font-variation-settings: 'wght' 300;">calendar_month</span>
+                    <span class="sidebar-text font-medium">Mi Agenda</span>
+                </a>
+            </nav>
+            
+            <div class="mt-auto flex flex-col items-stretch gap-2 pt-6 border-t border-white/10 px-[16px]">
+                
+                <button onclick="toggleAppMode()" id="mode-toggle-btn" class="w-full bg-[#1E3A8A]/20 text-[#60A5FA] border border-[#1E3A8A] rounded-[200px] py-2 px-4 flex justify-center items-center gap-2 font-body text-[12px] font-bold uppercase hover:bg-[#1E3A8A]/40 transition-colors sidebar-text mb-2">
+                    <span class="material-symbols-outlined text-[18px]">swap_horiz</span>
+                    <span id="mode-toggle-text">Cambiar a Especialista</span>
+                </button>
+
+                <button class="w-full bg-white text-[#333333] rounded-[200px] py-3 px-4 flex justify-between items-center font-sans text-[16px] font-medium hover:bg-gray-50 transition-colors sidebar-text">
+                    <span class="truncate pr-2 text-[14px]">Valentina Rodríguez</span>
+                    <span class="material-symbols-outlined text-[20px]">expand_more</span>
+                </button>
+                <button onclick="doLogout()" class="w-full bg-transparent text-[#888888] rounded-[200px] py-2 px-4 flex justify-center items-center gap-2 font-body text-[12px] font-bold uppercase hover:text-white transition-colors sidebar-text mt-2">
+                    <span class="material-symbols-outlined text-[18px]">logout</span>
+                    <span>Cerrar Sesión</span>
+                </button>
+            </div>
+        </aside>
+
+        <main id="main-content" class="main-expanded transition-all duration-300 p-8 pb-24 relative">
+            
+            <div id="dashboard-view" class="view-section block">
+                <div class="flex w-full gap-8 mb-10">
+                    <div class="flex flex-col gap-4 w-[500px] flex-shrink-0">
+                        <div class="bg-[#333333] rounded-[24px] px-[32px] py-[24px] flex flex-col justify-center shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex-1">
+                            <span class="text-[#F1F1F1]/80 font-body text-[14px] font-medium uppercase tracking-widest mb-1">HOLA, VALENTINA</span>
+                            <h1 class="text-[#F1F1F1] font-headline text-[40px] leading-[40px] m-0">Salud en Casa</h1>
+                        </div>
+                        <div class="flex gap-4 w-full items-stretch">
+                            <button onclick="openRequestModal()" class="w-full h-[48px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] font-body text-[14px] font-medium uppercase flex items-center justify-center gap-[10px] hover:bg-[#172b66] transition-colors shadow-sm">
+                                PEDIR VETERINARIO <span class="material-symbols-outlined text-[20px]">note_add</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#FFFFFF] rounded-[24px] px-[40px] py-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex-1 flex gap-16 items-center justify-center relative">
+                        <div class="flex flex-col gap-2 items-center text-center">
+                            <span class="text-[#3C3C3C] font-body text-[16px] font-medium uppercase">Mascotas</span>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-[#2ECC71] font-headline text-[64px] leading-[50px]">2</span>
+                            </div>
+                        </div>
+                        <div class="w-px h-[80px] bg-gray-100"></div> 
+                        <div class="flex flex-col gap-4 items-center text-center">
+                            <span class="text-[#3C3C3C] font-body text-[16px] font-medium uppercase">Estado General</span>
+                            <div class="flex items-center gap-3">
+                                <div class="flex items-center gap-2 bg-[#1E3A8A]/10 border border-[#1E3A8A]/20 px-4 py-2 rounded-[200px]">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-[#1E3A8A] animate-pulse"></div>
+                                    <span class="font-body text-[14px] font-bold uppercase text-[#1E3A8A] tracking-wider">PROTEGIDAS</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pets-list-view" class="view-section hidden">
+                <div class="flex justify-between items-center mb-10">
+                    <h1 class="text-[#333333] font-headline text-[40px] leading-[40px] m-0">Mis Mascotas</h1>
+                    <button onclick="switchView('pet-add-view')" class="h-[48px] px-[24px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] font-body text-[14px] font-medium uppercase flex items-center gap-2 hover:bg-[#172b66] transition-colors shadow-md">
+                        AÑADIR MASCOTA <span class="material-symbols-outlined text-[20px]">add_circle</span>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-8 mb-10">
+                    <div onclick="switchView('pet-profile-view')" class="cursor-pointer bg-[#FFFFFF] rounded-[24px] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center justify-between border border-gray-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow">
+                        <div class="max-w-[60%] w-full">
+                            <span class="font-body text-[12px] font-medium uppercase text-[#888888] mb-2 block tracking-widest">GATA PERSA</span>
+                            <h3 class="font-headline text-[28px] text-[#333333] mb-3">Luna</h3>
+                            <p class="font-body text-[14px] font-normal text-[#1E3A8A] font-medium leading-relaxed">Ver ficha médica e historial ></p>
+                        </div>
+                        <div class="w-[120px] h-[120px] bg-[#1E3A8A]/5 text-[#1E3A8A] rounded-full border border-[#1E3A8A]/20 flex flex-col items-center justify-center shadow-inner overflow-hidden">
+                            <span class="material-symbols-outlined text-[48px]">pets</span>
+                        </div>
+                    </div>
+                    <div class="cursor-pointer bg-[#FFFFFF] rounded-[24px] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center justify-between border border-gray-50 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow">
+                        <div class="max-w-[60%] w-full">
+                            <span class="font-body text-[12px] font-medium uppercase text-[#888888] mb-2 block tracking-widest">GOLDEN RETRIEVER</span>
+                            <h3 class="font-headline text-[28px] text-[#333333] mb-3">Thor</h3>
+                            <p class="font-body text-[14px] font-normal text-[#1E3A8A] font-medium leading-relaxed">Ver ficha médica e historial ></p>
+                        </div>
+                        <div class="w-[120px] h-[120px] bg-gray-100 text-[#888888] rounded-full border border-gray-200 flex flex-col items-center justify-center shadow-inner overflow-hidden">
+                            <span class="material-symbols-outlined text-[48px]">pets</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="vet-dashboard-view" class="view-section hidden">
+                <div class="flex w-full gap-8 mb-10">
+                    <div class="flex flex-col gap-4 w-[500px] flex-shrink-0">
+                        <div class="bg-[#1E3A8A] rounded-[24px] px-[32px] py-[24px] flex flex-col justify-center shadow-[0_8px_30px_rgb(0,0,0,0.15)] flex-1 text-white border border-[#172b66]">
+                            <span class="text-white/70 font-body text-[14px] font-medium uppercase tracking-widest mb-1">PANEL PROFESIONAL</span>
+                            <h1 class="text-white font-headline text-[40px] leading-[40px] m-0">Dr. Mendoza</h1>
+                        </div>
+                        <button class="w-full h-[48px] rounded-[200px] border border-[#1E3A8A] text-[#1E3A8A] bg-white font-body text-[14px] font-medium uppercase flex items-center justify-center gap-[10px] hover:bg-gray-50 transition-colors shadow-sm">
+                            <div class="w-2.5 h-2.5 rounded-full bg-[#2ECC71] animate-pulse"></div>
+                            DISPONIBLE PARA CONSULTAS
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mb-6 mt-10">
+                    <h2 class="text-[#333333] font-headline text-[32px] mb-2">Próximas Visitas Asignadas</h2>
+                </div>
+
+                <div class="grid grid-cols-1 gap-6">
+                    <div class="bg-white p-8 rounded-[24px] border-2 border-[#1E3A8A] shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex justify-between items-center relative overflow-hidden">
+                        <div class="absolute right-0 top-0 bottom-0 w-[200px] bg-map-pattern opacity-50 border-l border-gray-100"></div>
+                        <div class="flex flex-col max-w-[60%] relative z-10">
+                            <span class="bg-[#F39C12]/20 text-[#F39C12] font-body text-[11px] font-bold uppercase px-3 py-1 rounded-[200px] self-start mb-4">Urgencia Menor</span>
+                            <h3 class="font-headline text-[28px] text-[#333333] mb-1">Paciente: Thor (Golden Retriever)</h3>
+                            <p class="font-sans text-[16px] text-[#888888] mb-4">Dueño: Valentina R. • Dirección: Cll 60 # 3-21, Bogotá</p>
+                            <div class="flex gap-4 mt-2">
+                                <button class="h-[48px] px-[32px] rounded-[200px] bg-[#1E3A8A] text-white font-body text-[14px] font-medium uppercase hover:bg-[#172b66] transition-colors flex items-center gap-2">
+                                    <span class="material-symbols-outlined">navigation</span> INICIAR RUTA
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white p-8 rounded-[24px] border border-gray-200 shadow-sm flex justify-between items-center opacity-80">
+                        <div class="flex flex-col max-w-[60%] relative z-10">
+                            <span class="bg-gray-100 text-[#888888] font-body text-[11px] font-bold uppercase px-3 py-1 rounded-[200px] self-start mb-4">Control General</span>
+                            <h3 class="font-headline text-[24px] text-[#333333] mb-1">Paciente: Max (Bulldog)</h3>
+                            <p class="font-sans text-[14px] text-[#888888]">Dueño: Andrés G. • Dirección: Suba, Cll 145</p>
+                        </div>
+                        <div class="text-right flex flex-col items-end pr-8">
+                            <span class="font-sans text-[12px] text-[#888888] block">Horario asignado</span>
+                            <span class="font-headline text-[24px] text-[#333333]">16:00 PM</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="pet-profile-view" class="view-section hidden">
+                <button onclick="switchView('pets-list-view')" class="mb-6 flex items-center gap-2 text-[#888888] hover:text-[#1E3A8A] font-body text-[14px] font-medium uppercase transition-colors"><span class="material-symbols-outlined text-[20px]">arrow_back</span> Volver a mascotas</button>
+                <div class="bg-[#FFFFFF] rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 flex items-center justify-between border border-gray-50 mb-8">
+                    <div class="flex items-center gap-6">
+                        <div class="w-[100px] h-[100px] rounded-full bg-[#1E3A8A] text-white flex items-center justify-center shadow-md"><span class="material-symbols-outlined text-[40px]">pets</span></div>
+                        <div><h1 class="font-headline text-[40px] text-[#333333] leading-none mb-2">Luna</h1><span class="bg-gray-100 text-[#888888] font-body text-[12px] font-bold uppercase px-3 py-1 rounded-[200px]">Gata • Persa • 3 Años • 4.2 kg</span></div>
+                    </div>
+                    <button onclick="switchView('pet-edit-view')" class="h-[48px] px-[24px] rounded-[200px] border border-[#1E3A8A] text-[#1E3A8A] bg-white font-body text-[14px] font-medium uppercase hover:bg-[#1E3A8A]/5 transition-colors flex items-center gap-2">EDITAR PERFIL <span class="material-symbols-outlined text-[20px]">edit</span></button>
+                </div>
+            </div>
+
+            <div id="pet-edit-view" class="view-section hidden">
+                <button onclick="switchView('pet-profile-view')" class="mb-6 flex items-center gap-2 text-[#888888] hover:text-[#1E3A8A] font-body text-[14px] font-medium uppercase transition-colors"><span class="material-symbols-outlined text-[20px]">arrow_back</span> Cancelar</button>
+                <div class="bg-[#FFFFFF] rounded-[32px] p-12 border border-gray-50"><h1 class="text-[#1E3A8A] font-headline text-[32px] mb-10">Editar Perfil de Luna</h1><div class="flex justify-end gap-4 border-t border-gray-100 pt-6"><button onclick="switchView('pet-profile-view')" class="h-[48px] px-[28px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] font-body text-[14px] font-medium uppercase">GUARDAR CAMBIOS</button></div></div>
+            </div>
+
+            <div id="pet-add-view" class="view-section hidden">
+                <button onclick="switchView('pets-list-view')" class="mb-6 flex items-center gap-2 text-[#888888] hover:text-[#1E3A8A] font-body text-[14px] font-medium uppercase transition-colors"><span class="material-symbols-outlined text-[20px]">arrow_back</span> Volver</button>
+                <div class="bg-[#FFFFFF] rounded-[32px] p-12 border border-gray-50">
+                    <h1 class="text-[#1E3A8A] font-headline text-[32px] mb-10">Añadir Nueva Mascota</h1>
+                    <div class="flex justify-end gap-4 border-t border-gray-100 pt-6"><button onclick="switchView('pets-list-view')" class="h-[48px] px-[28px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] font-body text-[14px] font-medium uppercase">CREAR MASCOTA</button></div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="request-modal" class="hidden fixed inset-0 bg-[#333333]/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+        <main class="bg-[#FFFFFF] w-full max-w-[1000px] h-[90vh] rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.15)] flex flex-col relative overflow-hidden">
+            <button onclick="closeRequestModal()" class="absolute top-[32px] right-[32px] w-10 h-10 flex items-center justify-center rounded-full text-[#3C3C3C] bg-gray-50 hover:bg-gray-100 z-20 transition-colors"><span class="material-symbols-outlined text-[28px]">close</span></button>
+
+            <div id="request-step-1" class="flex-1 overflow-y-auto p-[48px] custom-scrollbar flex flex-col block">
+                <header class="flex justify-between items-center w-full mb-10 border-b border-gray-50 pb-6 pr-12">
+                    <h1 class="text-[#1E3A8A] font-headline text-[40px] leading-[40px] m-0">Pedir Veterinario a Domicilio</h1>
+                </header>
+                <section class="grid grid-cols-2 gap-8 mb-8 flex-shrink-0 relative">
+                    <div class="w-full relative col-span-2">
+                        <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Dirección de atención</label>
+                        <div class="relative cursor-pointer hover:opacity-80 transition-opacity">
+                            <span class="material-symbols-outlined absolute left-5 top-1/2 -translate-y-1/2 text-[#1E3A8A]">location_on</span>
+                            <input type="text" readonly value="Casa: Chapinero Alto, Cll 60 # 3-21, Bogotá" class="w-full h-[52px] pl-[48px] pr-12 border-2 border-[#1E3A8A]/20 bg-[#1E3A8A]/5 rounded-[200px] font-sans text-[14px] font-bold text-[#1E3A8A] cursor-pointer">
+                        </div>
+                    </div>
+                    <div class="w-full relative dropdown-wrapper">
+                        <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Mascota</label>
+                        <select class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] bg-white outline-none"><option>Luna (Gata Persa)</option></select>
+                        <span class="material-symbols-outlined absolute right-5 top-[38px] text-[#888888] pointer-events-none">expand_more</span>
+                    </div>
+                    <div class="w-full relative dropdown-wrapper">
+                        <label class="block font-sans text-[14px] text-[#3C3C3C] mb-2 pl-2">Consulta</label>
+                        <select class="w-full h-[52px] px-6 border border-gray-200 rounded-[200px] bg-white outline-none"><option>Consulta General</option></select>
+                        <span class="material-symbols-outlined absolute right-5 top-[38px] text-[#888888] pointer-events-none">expand_more</span>
+                    </div>
+                </section>
+                <section class="mb-4 border-t border-gray-100 pt-8 mt-auto">
+                    <h2 class="text-[#333333] font-headline text-[24px] mb-4">¿Cómo deseas pagar?</h2>
+                    <div class="flex gap-6">
+                        <div id="pay-card" onclick="selectPayment('card')" class="cursor-pointer flex-1 border-2 border-[#1E3A8A] bg-[#1E3A8A]/5 rounded-[24px] p-6 flex items-center gap-4 transition-all">
+                            <div class="w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#1E3A8A] shadow-sm"><span class="material-symbols-outlined text-[24px]">credit_card</span></div>
+                            <div><span class="font-headline text-[16px] text-[#333333] block">Tarjeta / PSE</span></div>
+                            <span id="check-card" class="material-symbols-outlined text-[#1E3A8A] ml-auto text-[24px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                        </div>
+                        <div id="pay-cash" onclick="selectPayment('cash')" class="cursor-pointer flex-1 border-2 border-gray-100 bg-white rounded-[24px] p-6 flex items-center gap-4 transition-all hover:border-gray-200">
+                            <div class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-[#888888] shadow-sm"><span class="material-symbols-outlined text-[24px]">payments</span></div>
+                            <div><span class="font-headline text-[16px] text-[#333333] block">Efectivo al finalizar</span></div>
+                            <span id="check-cash" class="material-symbols-outlined text-[#888888] ml-auto text-[24px] hidden" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                        </div>
+                    </div>
+                </section>
+                <footer class="mt-8 flex justify-end gap-4 border-t border-gray-50 pt-6">
+                    <button onclick="closeRequestModal()" class="h-[48px] px-[24px] rounded-[200px] border border-gray-300 text-[#3C3C3C] uppercase font-body text-[14px]">CANCELAR</button>
+                    <button onclick="findVetsFlow()" class="h-[48px] px-[32px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] uppercase font-body text-[14px] flex items-center gap-2">BUSCAR VETERINARIOS <span class="material-symbols-outlined text-[20px]">search</span></button>
+                </footer>
+            </div>
+
+            <div id="request-step-2" class="hidden flex-1 overflow-y-auto p-[48px] custom-scrollbar flex flex-col">
+                <header class="flex justify-between items-center w-full mb-8 border-b border-gray-50 pb-6 pr-12">
+                    <h1 class="text-[#1E3A8A] font-headline text-[32px] leading-[40px] m-0">Selecciona a tu profesional</h1>
+                </header>
+                <section class="grid grid-cols-1 gap-6 mb-8">
+                    <div id="vet-option-1" onclick="selectVetOption('vet-option-1')" class="cursor-pointer bg-white p-6 rounded-[24px] border-2 border-[#1E3A8A] bg-[#1E3A8A]/5 flex items-center justify-between transition-all">
+                        <div class="flex items-center gap-4">
+                            <div class="w-16 h-16 rounded-full overflow-hidden border border-gray-200"><img src="https://ui-avatars.com/api/?name=Luisa+Perez&background=FFFFFF&color=1E3A8A" class="w-full h-full object-cover"></div>
+                            <div>
+                                <span class="font-headline text-[20px] text-[#333333] mb-1 block">Dra. Luisa Pérez</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="bg-[#1E3A8A]/10 text-[#1E3A8A] font-body text-[11px] font-bold uppercase px-3 py-1 rounded-[200px]">Generalista</span>
+                                    <span class="text-[#2ECC71] text-[16px] material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">star</span><span class="font-headline text-[14px]">4.9</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-right flex flex-col items-end">
+                            <span class="font-sans text-[12px] text-[#888888] block">Llegada est.</span><span class="font-headline text-[24px] text-[#333333]">15 min</span>
+                            <span class="vet-check material-symbols-outlined text-[#1E3A8A] mt-2" style="font-variation-settings: 'FILL' 1;">radio_button_checked</span>
+                        </div>
+                    </div>
+                </section>
+                <footer class="mt-auto flex justify-end gap-4 border-t border-gray-50 pt-6">
+                    <button onclick="document.getElementById('request-step-2').classList.add('hidden'); document.getElementById('request-step-1').classList.remove('hidden');" class="h-[48px] px-[24px] rounded-[200px] border border-gray-300 text-[#3C3C3C] uppercase font-body text-[14px]">VOLVER</button>
+                    <button onclick="startBookingFlow()" class="h-[48px] px-[32px] rounded-[200px] bg-[#1E3A8A] text-[#FFFFFF] uppercase font-body text-[14px] flex items-center gap-2">CONFIRMAR Y PAGAR <span class="material-symbols-outlined text-[20px]">arrow_forward</span></button>
+                </footer>
+            </div>
+        </main>
+    </div>
+
+    <div id="loader-modal" class="hidden fixed inset-0 bg-[#333333]/90 backdrop-blur-md z-[60] flex items-center justify-center p-6">
+        <div class="bg-white rounded-[32px] p-10 flex flex-col items-center justify-center max-w-[500px] w-full text-center">
+            <div id="loader-spinner" class="w-16 h-16 border-4 border-gray-100 border-t-[#1E3A8A] rounded-full animate-spin mb-8"></div>
+            <div id="loader-success" class="hidden w-16 h-16 bg-[#2ECC71]/10 rounded-full flex items-center justify-center mb-8"><span class="material-symbols-outlined text-[#2ECC71] text-[40px]">check_circle</span></div>
+            <h2 id="loader-title" class="font-headline text-[28px] text-[#333333] mb-4">Procesando...</h2>
+            <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden mt-4"><div id="loader-progress-bar" class="h-full bg-[#F39C12] rounded-full transition-all duration-500" style="width: 10%;"></div></div>
+        </div>
+    </div>
+    
+    <div id="tracking-pills" onclick="document.getElementById('map-modal').classList.remove('hidden')" class="hidden cursor-pointer fixed bottom-10 left-1/2 -translate-x-1/2 z-[45] transition-all duration-500 transform translate-y-20 hover:-translate-y-1">
+        <div class="bg-[#FFFFFF] rounded-[24px] p-6 shadow-[0_20px_40px_rgb(0,0,0,0.15)] flex items-center gap-6 border border-gray-50">
+            <div class="flex items-center gap-3 bg-[#1E3A8A]/10 border border-[#1E3A8A]/20 px-4 py-2 rounded-[200px]"><div class="w-2.5 h-2.5 rounded-full bg-[#1E3A8A] animate-pulse"></div><span class="font-body text-[14px] font-bold uppercase text-[#1E3A8A]">EN CAMINO</span></div>
+            <p class="font-sans text-[14px] font-bold">Dra. Luisa Pérez</p>
+            <div class="w-[40px] h-[40px] rounded-full bg-gray-50 border border-gray-200 flex items-center justify-center text-[#1E3A8A]">
+                <span class="material-symbols-outlined text-[20px]">map</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="map-modal" class="hidden fixed inset-0 bg-[#333333]/80 backdrop-blur-sm z-[70] flex items-center justify-center p-6">
+        <div class="bg-white w-full max-w-[800px] h-[80vh] rounded-[32px] flex flex-col relative overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+            <button onclick="document.getElementById('map-modal').classList.add('hidden')" class="absolute top-[24px] right-[24px] w-10 h-10 flex items-center justify-center rounded-full bg-white text-[#333333] shadow-md z-20 hover:bg-gray-100 transition-colors"><span class="material-symbols-outlined">close</span></button>
+            
+            <div class="w-full flex-1 bg-map-pattern relative overflow-hidden">
+                <div class="absolute top-[20%] left-[40%] flex flex-col items-center">
+                    <span class="material-symbols-outlined text-[#333333] text-[36px] drop-shadow-md">home_pin</span>
+                    <span class="bg-white px-2 py-1 rounded-md text-[10px] font-bold mt-1 shadow-sm uppercase">Tu domicilio</span>
+                </div>
+                
+                <svg class="absolute top-[20%] left-[40%] w-[100%] h-[100%] overflow-visible" style="pointer-events: none;">
+                    <path d="M 18 18 C 50 150, 120 180, 200 200" stroke="#1E3A8A" stroke-width="4" fill="transparent" class="dash-anim opacity-80" />
+                </svg>
+
+                <div class="absolute top-[45%] left-[55%] flex flex-col items-center justify-center">
+                    <div class="absolute w-16 h-16 bg-[#1E3A8A]/40 rounded-full animate-ping pointer-events-none"></div>
+                    <div class="absolute w-24 h-24 bg-[#1E3A8A]/20 rounded-full animate-pulse pointer-events-none"></div>
+                    <div class="relative w-12 h-12 bg-[#1E3A8A] rounded-full flex items-center justify-center text-white shadow-[0_4px_15px_rgba(30,58,138,0.5)] border-2 border-white z-10">
+                        <span class="material-symbols-outlined text-[24px]">directions_car</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-8 border-t border-gray-100 flex items-center justify-between z-10 bg-white shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+                <div class="flex items-center gap-4">
+                    <div class="w-16 h-16 rounded-full overflow-hidden border border-gray-200">
+                        <img src="https://ui-avatars.com/api/?name=Luisa+Perez&background=F3F4F6&color=1E3A8A" class="w-full h-full object-cover">
+                    </div>
+                    <div>
+                        <h3 class="font-headline text-[24px] text-[#333333] m-0">Dra. Luisa Pérez</h3>
+                        <span class="font-sans text-[14px] text-[#888888]">Matrícula: MVZ-45982 • 4.9 ★</span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <span class="block font-body text-[12px] font-medium uppercase text-[#888888] mb-1 tracking-wider">LLEGANDO EN</span>
+                    <span class="font-headline text-[32px] text-[#1E3A8A]">15 min</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ======= AUTH / LOGIN =======
+        function switchAuth(stepId) {
+            const views = ['auth-login', 'auth-role-select', 'auth-register-client-1', 'auth-register-client-2', 'auth-register-vet-1', 'auth-register-vet-2'];
+            views.forEach(v => document.getElementById(v).classList.add('hidden'));
+            document.getElementById(stepId).classList.remove('hidden');
+        }
+
+        // Nueva función dedicada para ir directamente al formulario de Vet
+        function startVetRegistration() {
+            document.getElementById('app-wrapper').classList.replace('block', 'hidden');
+            document.getElementById('auth-wrapper').classList.replace('hidden', 'block');
+            switchAuth('auth-register-vet-1');
+        }
+
+        function doLogin(modeOverride = null) {
+            document.getElementById('auth-wrapper').classList.replace('block', 'hidden');
+            document.getElementById('app-wrapper').classList.replace('hidden', 'block');
+            
+            isAppInVetMode = modeOverride === 'vet';
+            updateAppModeUI();
+        }
+
+        function doLogout() {
+            document.getElementById('app-wrapper').classList.replace('block', 'hidden');
+            document.getElementById('auth-wrapper').classList.replace('hidden', 'block');
+            switchAuth('auth-login');
+        }
+
+        // ======= MODO SWITCHER (CLIENTE <-> VET) =======
+        let isAppInVetMode = false;
+        function toggleAppMode() {
+            isAppInVetMode = !isAppInVetMode;
+            updateAppModeUI();
+        }
+
+        function updateAppModeUI() {
+            const btnText = document.getElementById('mode-toggle-text');
+            const clientItems = document.querySelectorAll('.client-menu-item');
+            const vetItems = document.querySelectorAll('.vet-menu-item');
+
+            if (isAppInVetMode) {
+                btnText.innerText = "Cambiar a Dueño";
+                clientItems.forEach(el => el.classList.add('hidden'));
+                vetItems.forEach(el => el.classList.remove('hidden'));
+                switchView('vet-dashboard-view');
+            } else {
+                btnText.innerText = "Cambiar a Especialista";
+                clientItems.forEach(el => el.classList.remove('hidden'));
+                vetItems.forEach(el => el.classList.add('hidden'));
+                switchView('dashboard-view');
+            }
+        }
+
+        // ======= SIDEBAR AND VIEW NAV =======
+        function toggleSidebar() {
+            const sb = document.getElementById('sidebar');
+            const mc = document.getElementById('main-content');
+            sb.classList.toggle('sidebar-expanded');
+            sb.classList.toggle('sidebar-collapsed');
+            mc.classList.toggle('main-expanded');
+            mc.classList.toggle('main-collapsed');
+        }
+        function switchView(viewId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(viewId).classList.remove('hidden');
+        }
+
+        // ======= REQUEST MODAL AND PAYMENTS =======
+        function openRequestModal() { 
+            document.getElementById('request-step-1').classList.remove('hidden');
+            document.getElementById('request-step-2').classList.add('hidden');
+            document.getElementById('request-modal').classList.remove('hidden'); 
+        }
+        function closeRequestModal() { document.getElementById('request-modal').classList.add('hidden'); }
+
+        let currentPaymentMethod = 'card';
+        function selectPayment(method) {
+            currentPaymentMethod = method;
+            const card = document.getElementById('pay-card');
+            const cash = document.getElementById('pay-cash');
+            if(method === 'card') {
+                card.className = "cursor-pointer flex-1 border-2 border-[#1E3A8A] bg-[#1E3A8A]/5 rounded-[24px] p-6 flex items-center gap-4 transition-all";
+                card.querySelector('.w-12').className = "w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#1E3A8A] shadow-sm";
+                document.getElementById('check-card').classList.remove('hidden');
+                cash.className = "cursor-pointer flex-1 border-2 border-gray-100 bg-white rounded-[24px] p-6 flex items-center gap-4 hover:border-gray-200 transition-all";
+                cash.querySelector('.w-12').className = "w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-[#888888] shadow-sm";
+                document.getElementById('check-cash').classList.add('hidden');
+            } else {
+                cash.className = "cursor-pointer flex-1 border-2 border-[#1E3A8A] bg-[#1E3A8A]/5 rounded-[24px] p-6 flex items-center gap-4 transition-all";
+                cash.querySelector('.w-12').className = "w-12 h-12 rounded-full bg-white flex items-center justify-center text-[#1E3A8A] shadow-sm";
+                document.getElementById('check-cash').classList.remove('hidden');
+                card.className = "cursor-pointer flex-1 border-2 border-gray-100 bg-white rounded-[24px] p-6 flex items-center gap-4 hover:border-gray-200 transition-all";
+                card.querySelector('.w-12').className = "w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center text-[#888888] shadow-sm";
+                document.getElementById('check-card').classList.add('hidden');
+            }
+        }
+
+        // ======= LOADERS =======
+        function findVetsFlow() {
+            document.getElementById('request-modal').classList.add('hidden');
+            const loaderModal = document.getElementById('loader-modal');
+            document.getElementById('loader-title').innerText = "Buscando profesionales...";
+            document.getElementById('loader-progress-bar').style.width = "40%";
+            loaderModal.classList.remove('hidden');
+
+            setTimeout(() => {
+                loaderModal.classList.add('hidden');
+                document.getElementById('request-step-1').classList.add('hidden');
+                document.getElementById('request-step-2').classList.remove('hidden');
+                document.getElementById('request-modal').classList.remove('hidden');
+            }, 1500);
+        }
+
+        function startBookingFlow() {
+            closeRequestModal();
+            const loaderModal = document.getElementById('loader-modal');
+            document.getElementById('loader-title').innerText = currentPaymentMethod === 'card' ? "Procesando pago..." : "Registrando solicitud...";
+            document.getElementById('loader-progress-bar').style.width = "20%";
+            document.getElementById('loader-progress-bar').className = "h-full bg-[#F39C12] rounded-full transition-all duration-500";
+            document.getElementById('loader-spinner').classList.remove('hidden');
+            document.getElementById('loader-success').classList.add('hidden');
+            loaderModal.classList.remove('hidden');
+
+            setTimeout(() => {
+                document.getElementById('loader-title').innerText = "¡Confirmado!";
+                document.getElementById('loader-progress-bar').style.width = "100%";
+                document.getElementById('loader-progress-bar').className = "h-full bg-[#2ECC71] rounded-full transition-all duration-500";
+                document.getElementById('loader-spinner').classList.add('hidden');
+                document.getElementById('loader-success').classList.remove('hidden');
+            }, 2000);
+
+            setTimeout(() => {
+                loaderModal.classList.add('hidden');
+                const trackingPill = document.getElementById('tracking-pills');
+                trackingPill.classList.remove('hidden');
+                setTimeout(() => trackingPill.classList.remove('translate-y-20'), 50);
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
